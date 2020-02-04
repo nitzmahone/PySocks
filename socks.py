@@ -176,6 +176,19 @@ def create_connection(dest_pair,
 
     err = None
 
+    if proxy_addr.startswith('/'):
+        sock = socksocket(socket.AF_UNIX)
+
+        if isinstance(timeout, (int, float)):
+            sock.settimeout(timeout)
+
+        if proxy_type:
+            sock.set_proxy(proxy_type, proxy_addr, proxy_port, proxy_rdns,
+                           proxy_username, proxy_password)
+
+        sock.connect((remote_host, remote_port))
+        return sock
+
     # Allow the SOCKS proxy to be on IPv4 or IPv6 addresses.
     for r in socket.getaddrinfo(proxy_addr, proxy_port, 0, socket.SOCK_STREAM):
         family, socket_type, proto, canonname, sa = r
@@ -790,7 +803,9 @@ class socksocket(_BaseSocket):
             # Error while connecting to proxy
             self.close()
             if not catch_errors:
-                proxy_addr, proxy_port = proxy_addr
+                proxy_port = 0
+                if isinstance(proxy_addr, tuple):
+                    proxy_addr, proxy_port = proxy_addr
                 proxy_server = "{}:{}".format(proxy_addr, proxy_port)
                 printable_type = PRINTABLE_PROXY_TYPES[proxy_type]
 
@@ -841,6 +856,12 @@ class socksocket(_BaseSocket):
         """
         (proxy_type, proxy_addr, proxy_port, rdns, username,
          password) = self.proxy
+
+        if proxy_addr.startswith('/'):
+            if not os.path.exists(proxy_addr):
+                raise GeneralProxyError("Proxy socket file not found: {0}".format(proxy_addr))
+            return proxy_addr
+
         proxy_port = proxy_port or DEFAULT_PORTS.get(proxy_type)
         if not proxy_port:
             raise GeneralProxyError("Invalid proxy type")
